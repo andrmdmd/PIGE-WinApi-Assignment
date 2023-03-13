@@ -17,17 +17,20 @@ private:
 		UINT message,
 		WPARAM wparam,
 		LPARAM lparam);
+	
 	HWND create_keyboard_window();
 	HWND create_game_window();
 	HMENU mMenuHandle;
 	HINSTANCE m_instance;
 	HWND m_main;
+	HWND m_game;
 
 
 public:
 	app(HINSTANCE instance);
 	int run(int show_command);
 	static int index;
+	static int timer;
 };
 
 
