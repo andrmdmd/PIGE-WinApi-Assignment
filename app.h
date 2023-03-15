@@ -31,6 +31,8 @@ private:
 	void ClearGame();
 	void DrawNewGame();
 	void GetKeyRects();
+	void ChooseWords();
+	void ReadWords();
 
 public:
 	static const int MAX_COLUMNS = 5;

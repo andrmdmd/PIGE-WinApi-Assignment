@@ -2,9 +2,13 @@
 #include <stdexcept>
 #include <time.h>
 #include <windowsx.h>
+#include <fstream>
+#include <vector>
+#include <algorithm>
+#include <random>
+#include <string>
 
 std::wstring const app::s_class_name{ L"Wordle" };
-std::string word[] = {"ZOSIA", "SUPER", "LADNA", "MADRA"};
 char currWord[5];
 int app::boardsNum = 0;
 int currCol = 0;
@@ -12,8 +16,8 @@ int currRow = 0;
 int index = 0;
 bool dragWindow = false;
 int completed[4];
-
-VOID CALLBACK Timer(HWND hWnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime);
+std::string word[4]; // = { "ZOSIA", "SUPER", "LADNA", "MADRA" };
+std::vector<std::string> wordList;
 
 bool app::register_class()
 {
@@ -69,6 +73,10 @@ HWND app::create_keyboard_window()
 
 HWND app::create_game_window(int size, int index)
 {
+	//keyColor[p][i].left = letterKey[p].left + (i % 2) * size / 2;
+	//keyColor[p][i].top = letterKey[p].top + (i / 2) * size / 2;
+	//keyColor[p][i].right = keyColor[p][i].left + size / 2;
+	//keyColor[p][i].bottom = boardsNum == 4 ? keyColor[p][i].top + size / 2 : letterKey[p].bottom;
 	int len2 = 333;
 	int len3;
 	int x_coord, y_coord;
@@ -79,13 +87,13 @@ HWND app::create_game_window(int size, int index)
 	}
 	if (size == 2) {
 		len3 = 543;
-		x_coord = (GetSystemMetrics(SM_CXSCREEN) / 4 - len2 / 4) + (index-1) * (GetSystemMetrics(SM_CXSCREEN) / 2 - len2 / 2);
+		x_coord = (GetSystemMetrics(SM_CXSCREEN) / 4 - len2 / 4) + (index) * (GetSystemMetrics(SM_CXSCREEN) / 2 - len2 / 2);
 		y_coord = GetSystemMetrics(SM_CYSCREEN) / 2 - len3 / 2;
 	}
 	if(size == 4) {
 		len3 = 603;
 		x_coord = (GetSystemMetrics(SM_CXSCREEN) / 4 - len2 / 4) + (index % 2) * (GetSystemMetrics(SM_CXSCREEN) / 2 - len2 / 2);
-		y_coord = (index - 1) / 2 * (GetSystemMetrics(SM_CYSCREEN) / 2 - len3 / 2) + ((index-1)/2) * (GetSystemMetrics(SM_CYSCREEN) / 2 - len3 / 2);
+		y_coord = (index/2) * (GetSystemMetrics(SM_CYSCREEN) / 4 - len3 / 4) + (index/2) * (GetSystemMetrics(SM_CYSCREEN) / 2 - len3 / 2);
 	}
 	return CreateWindowExW(
 		0,
@@ -152,8 +160,9 @@ LRESULT app::window_proc(
 			CheckMenuItem(mMenuHandle, ID_DIFFICULTY_HARD, MF_UNCHECKED);
 			ClearGame();
 			boardsNum = 1;
-			m_game[0] = create_game_window(1, 1);
+			m_game[0] = create_game_window(1, 0);
 			DrawNewGame();
+			ChooseWords();
 			break;
 
 		case ID_DIFFICULTY_MEDIUM:
@@ -162,9 +171,10 @@ LRESULT app::window_proc(
 			CheckMenuItem(mMenuHandle, ID_DIFFICULTY_HARD, MF_UNCHECKED);
 			ClearGame();
 			boardsNum = 2;
-			m_game[0] = create_game_window(2, 1);
-			m_game[1] = create_game_window(2, 2);
+			m_game[0] = create_game_window(2, 0);
+			m_game[1] = create_game_window(2, 1);
 			DrawNewGame();
+			ChooseWords();
 			break;
 
 		case ID_DIFFICULTY_HARD:
@@ -174,8 +184,9 @@ LRESULT app::window_proc(
 			ClearGame();
 			boardsNum = 4;
 			for (int i = 0; i < boardsNum; i++)
-				m_game[i] = create_game_window(4, i+1);
+				m_game[i] = create_game_window(4, i);
 			DrawNewGame();
+			ChooseWords();
 			break;
 		}
 	}
@@ -218,6 +229,7 @@ LRESULT app::window_proc(
 							if (i == j) {
 								if (boxState[i][currRow][k] != 2) {
 									boxState[i][currRow][k] = 2;
+									if (completed[k] >= 5) continue;
 									completed[k]++;
 								}
 							}
@@ -238,7 +250,12 @@ LRESULT app::window_proc(
 			break;
 		default:
 			if (currCol == 5) break;
-			
+
+			if (currCol == 0)
+				for (int i = 0; i < boardsNum; i++)
+					if (completed[i] == 5)
+						completed[i] = 6;
+
 			char c = char(wparam);
 			if (c >= 'A' && c <= 'Z') {
 				DrawLetter(c);
@@ -309,6 +326,9 @@ int app::run(int show_command)
 	boardsNum = 1;
 	DrawNewGame();
 	GetKeyRects();
+	ReadWords();
+	ChooseWords();
+
 	MSG msg{};
 	BOOL result = TRUE;
 
@@ -421,7 +441,7 @@ void app::UpdateKey(char c, int i){
 	HDC hdc;
 	PAINTSTRUCT ps;
 	HFONT hFont, holdFont;
-	HBRUSH hBrush, holdBrush;
+	HBRUSH hBrush, holdBrush; 
 	HPEN hPen, holdPen;
 	int p = 0;
 	COLORREF c0 = RGB(164, 174, 196), c1 = RGB(243, 194, 55), c2 = RGB(121, 184, 81);
@@ -431,7 +451,7 @@ void app::UpdateKey(char c, int i){
 		p++;
 
 	for (int k = 0; k < boardsNum; k++) {
-
+		if (completed[k] > 5) continue;
 		COLORREF color = boxState[i][currRow][k] == 2 ? c2 : boxState[i][currRow][k] == 1 ? c1 : c0;
 		
 		hBrush = CreateSolidBrush(color);
@@ -479,6 +499,7 @@ void app::UpdateBox(int col, int row) {
 		KillTimer(m_main, 10);
 		currRow++;
 		currCol = 0;
+		index = 0;
 		
 	}
 
@@ -524,12 +545,6 @@ void app::UpdateBox(int col, int row) {
 		ReleaseDC(m_game[i], hdc);
 			
 	}
-	if (index == 5) {
-		index = 0;
-		for (int i = 0; i < boardsNum; i++)
-			if (completed[i] == 5)
-				completed[i] = 6;
-	}
 		
 
 }
@@ -570,4 +585,28 @@ void app::ClearGame() {
 		DestroyWindow(m_game[i]);
 		m_game[i] = nullptr;
 	}
+}
+
+void app::ReadWords() {
+	
+	std::ifstream file("Wordle.txt");
+	std::string w;
+	if (file.is_open()) {
+		while (getline(file, w))
+		{
+			wordList.push_back(w);
+		}
+	}
+	// extracting words from the file
+
+		file.close();
+}
+
+void app::ChooseWords() {
+
+	for (int i = 0; i < 4; i++) {
+		std::string random = wordList[rand() % wordList.size()];
+		word[i] = random;
+	}
+
 }
