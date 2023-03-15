@@ -4,6 +4,7 @@
 #include <windowsx.h>
 #include <fstream>
 #include <vector>
+#include <wingdi.h>
 #include <algorithm>
 #include <random>
 #include <string>
@@ -16,22 +17,11 @@ int currRow = 0;
 int index = 0;
 bool dragWindow = false;
 int completed[4];
-std::string word[4]; // = { "ZOSIA", "SUPER", "LADNA", "MADRA" };
+std::string word[4]; 
 std::vector<std::string> wordList;
 
 bool app::register_class()
 {
-	//WNDCLASSEXW desc{};
-	//if (GetClassInfoExW(m_instance, s_class_name.c_str(), &desc) != 0
-	//	return true;
-	//desc = {
-	//.cbSize = sizeof(WNDCLASSEXW),
-	//.lpfnWndProc = window_proc_static,
-	//.hInstance = m_instance,
-	//.hCursor = LoadCursorW(nullptr, L"IDC_ARROW"),
-	//.hbrBackground = CreateSolidBrush(RGB(255,255,255)),
-	//.lpszClassName = s_class_name.c_str()
-	//};
 	WNDCLASSEXW wcex{};
 
 	if (GetClassInfoExW(m_instance, s_class_name.c_str(), &wcex) != 0)
@@ -45,7 +35,7 @@ bool app::register_class()
 	wcex.hInstance = m_instance;
 	wcex.hIcon = LoadIcon(m_instance, MAKEINTRESOURCE(IDI_WORDLE));
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+	wcex.hbrBackground = CreateSolidBrush(RGB(255,255,255));
 	//wcex.lpszMenuName = MAKEINTRESOURCEW(IDR_MENU);
 	wcex.lpszClassName = s_class_name.c_str();
 	wcex.hIconSm = LoadIcon(m_instance, MAKEINTRESOURCE(IDI_WORDLE));
@@ -71,7 +61,7 @@ HWND app::create_keyboard_window()
 		this);
 }
 
-HWND app::create_game_window(int size, int index)
+HWND app::create_game_window(int style, int size, int index)
 {
 	//keyColor[p][i].left = letterKey[p].left + (i % 2) * size / 2;
 	//keyColor[p][i].top = letterKey[p].top + (i / 2) * size / 2;
@@ -95,8 +85,9 @@ HWND app::create_game_window(int size, int index)
 		x_coord = (GetSystemMetrics(SM_CXSCREEN) / 4 - len2 / 4) + (index % 2) * (GetSystemMetrics(SM_CXSCREEN) / 2 - len2 / 2);
 		y_coord = (index/2) * (GetSystemMetrics(SM_CYSCREEN) / 4 - len3 / 4) + (index/2) * (GetSystemMetrics(SM_CYSCREEN) / 2 - len3 / 2);
 	}
+	int s = style == 1 ? WS_EX_LAYERED : 0;
 	return CreateWindowExW(
-		0,
+		s,
 		s_class_name.c_str(),
 		L"WORDLE - PUZZLE",
 		WS_OVERLAPPED | WS_VISIBLE | WS_EX_TOPMOST,
@@ -160,7 +151,9 @@ LRESULT app::window_proc(
 			CheckMenuItem(mMenuHandle, ID_DIFFICULTY_HARD, MF_UNCHECKED);
 			ClearGame();
 			boardsNum = 1;
-			m_game[0] = create_game_window(1, 0);
+			WriteDifficulty(boardsNum);
+			for (int i = 0; i < boardsNum; i++)
+				m_game[i] = create_game_window(0, boardsNum, i);
 			DrawNewGame();
 			ChooseWords();
 			break;
@@ -171,8 +164,9 @@ LRESULT app::window_proc(
 			CheckMenuItem(mMenuHandle, ID_DIFFICULTY_HARD, MF_UNCHECKED);
 			ClearGame();
 			boardsNum = 2;
-			m_game[0] = create_game_window(2, 0);
-			m_game[1] = create_game_window(2, 1);
+			WriteDifficulty(boardsNum);
+			for (int i = 0; i < boardsNum; i++)
+				m_game[i] = create_game_window(0, boardsNum, i);
 			DrawNewGame();
 			ChooseWords();
 			break;
@@ -183,8 +177,9 @@ LRESULT app::window_proc(
 			CheckMenuItem(mMenuHandle, ID_DIFFICULTY_HARD, MF_CHECKED);
 			ClearGame();
 			boardsNum = 4;
+			WriteDifficulty(boardsNum);
 			for (int i = 0; i < boardsNum; i++)
-				m_game[i] = create_game_window(4, i);
+				m_game[i] = create_game_window(0, boardsNum, i);
 			DrawNewGame();
 			ChooseWords();
 			break;
@@ -199,29 +194,41 @@ LRESULT app::window_proc(
 		if (window == m_main)
 			PostQuitMessage(EXIT_SUCCESS);
 		return 0;
-	//case WM_PAINT:
-	//{
-	//	DrawNewGame();
-	//	
-	//	break;
-	//}
+
 	case WM_TIMER:
 		if (wparam == 10) {
 			UpdateBox(index++, currRow);
+		}
+		if (wparam == 15) {
+			AnimateBox(index, frame++, currRow);
+		}
+		break;
+	case WM_MOVE:
+		for (int i = 0; i < boardsNum; i++) {
+			if (window == overlay[i]) {
+				if (colorBG[i] == 0) break;
+				RECT rc;
+				GetWindowRect(overlay[i], &rc);
+				SetWindowPos(m_game[i], overlay[i], rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, NULL);
+			}
 		}
 		break;
 	case WM_CHAR:
 		if (window != m_main) break;
 
 		switch (wparam) {
-		case 0x08: // or '\b'
-			// Process a backspace.
+		case 0x08: 
 			if (currCol == 0) break;
 			DeleteLast();
-
 			break;
 		case 0x0D:
 			if (currCol != 5) break;
+			if (std::find(wordList.begin(), wordList.end(), currWord) == wordList.end()) {
+				for (int i = 0; i < MAX_COLUMNS; i++) {
+					DeleteLast();
+				}
+				break;
+			}
 			for (int k = 0; k < boardsNum; k++) {
 				for (int i = 0; i < MAX_COLUMNS; i++) {
 					for (int j = 0; j < MAX_COLUMNS; j++) {
@@ -230,7 +237,7 @@ LRESULT app::window_proc(
 								if (boxState[i][currRow][k] != 2) {
 									boxState[i][currRow][k] = 2;
 									if (completed[k] >= 5) continue;
-									completed[k]++;
+									if(boxState[i][currRow-1][k]!= 2) completed[k]++;
 								}
 							}
 							else if (boxState[i][currRow][k] != 2)
@@ -244,7 +251,17 @@ LRESULT app::window_proc(
 				UpdateKey(currWord[i], i);
 			}
 			index = 0;
-			SetTimer(window, 10, 300, NULL);
+			for (int j = 0; j < boardsNum; j++) {
+				for (int i = 0; i < MAX_COLUMNS; i++) {
+					letterAnimation[i][j].left = letterBox[i][currRow].left;
+					letterAnimation[i][j].right = letterBox[i][currRow].right;
+					letterAnimation[i][j].top = letterBox[i][currRow].top + size/2 - 3;
+					letterAnimation[i][j].bottom = letterBox[i][currRow].bottom - size/2 + 3;
+				}
+			}
+			frame = 0;
+			SetTimer(window, 15, 10, NULL);
+			SetTimer(window, 10, 90, NULL);
 			
 			
 			break;
@@ -281,9 +298,9 @@ app::app(HINSTANCE instance) :m_instance{ instance }, m_main{}
 {
 	register_class();
 	m_main = create_keyboard_window();
-	m_game[0] = create_game_window(1, 1);
+	//m_game[0] = create_game_window(1, 1);
 	mMenuHandle = GetMenu(m_main);
-	boardsNum = 1;
+	//boardsNum = 1;
 
 	for (int i = 0; i < MAX_COLUMNS; i++) {
 		for (int j = 0; j < MAX_ROWS; j++) {
@@ -321,14 +338,16 @@ int app::run(int show_command)
 	SetWindowLong(m_main, GWL_EXSTYLE, GetWindowLong(m_main, GWL_EXSTYLE) | WS_EX_LAYERED);
 	SetLayeredWindowAttributes(m_main, 0, (255 * 80) / 100, LWA_ALPHA);
 	ShowWindow(m_main, show_command);
-	//UpdateWindow(m_main);
-	ShowWindow(m_game[0], SW_SHOWNA);
-	boardsNum = 1;
+	boardsNum = GetDifficulty();
+	for (int i = 0; i < boardsNum; i++) {
+		m_game[i] = create_game_window(0, boardsNum, i);
+		colorBG[i] = 0;
+		setColor[i] = 0;
+	}
 	DrawNewGame();
 	GetKeyRects();
 	ReadWords();
 	ChooseWords();
-
 	MSG msg{};
 	BOOL result = TRUE;
 
@@ -353,7 +372,9 @@ void app::DrawNewGame() {
 	HFONT hFont, holdFont;
 
 	for (int i = 0; i < boardsNum; i++) {
+
 		hdc = GetDC(m_game[i]);
+
 		hBrush = CreateSolidBrush(RGB(251, 252, 255));
 		holdBrush = (HBRUSH)SelectObject(hdc, hBrush);
 		hPen = CreatePen(PS_SOLID, 2, RGB(222, 225, 233));
@@ -484,13 +505,11 @@ void app::UpdateKey(char c, int i){
 	const char cc[2] = { c };
 	MultiByteToWideChar(CP_ACP, 0, cc, -1, wString, 1);
 	SetBkMode(hdc, TRANSPARENT);
-	DrawText(hdc, wString, TRANSPARENT, &letterKey[p], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+	DrawText(hdc, wString, 1, &letterKey[p], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 	SelectObject(hdc, holdFont);
 	DeleteObject(hFont);
 
 	ReleaseDC(m_main, hdc);
-	
-	
 }
 
 void app::UpdateBox(int col, int row) {
@@ -499,18 +518,14 @@ void app::UpdateBox(int col, int row) {
 		KillTimer(m_main, 10);
 		currRow++;
 		currCol = 0;
-		index = 0;
-		
 	}
 
 	HDC hdc;
-	PAINTSTRUCT ps;
 	HFONT hFont, holdFont;
 	HBRUSH hBrush, holdBrush;
 	HPEN hPen, holdPen;
 	
 	COLORREF c0 = RGB(164, 174, 196), c1 = RGB(243, 194, 55), c2 = RGB(121, 184, 81);
-	
 
 	for (int i = 0; i < boardsNum; i++) {
 		if (completed[i] > 5) continue;
@@ -525,17 +540,14 @@ void app::UpdateBox(int col, int row) {
 		int rows = boardsNum == 1 ? 6 : boardsNum == 2 ? 8 : 10;
 
 		RoundRect(hdc, letterBox[col][row].left, letterBox[col][row].top, letterBox[col][row].right, letterBox[col][row].bottom, 5, 5);
-		
-		//EndPaint(m_game[i], &ps);
-		
-		//hdc = GetDC(m_game[i]);
+
 		hFont = CreateFontW(30, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
 		holdFont = (HFONT)SelectObject(hdc, hFont);
 		wchar_t* wString = new wchar_t[1];
 		const char cc[2] = { currWord[col] };
 		MultiByteToWideChar(CP_ACP, 0, cc, -1, wString, 1);
 		SetBkMode(hdc, TRANSPARENT);
-		DrawText(hdc, wString, TRANSPARENT, &letterBox[col][row], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		DrawText(hdc, wString, 1, &letterBox[col][row], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 		SelectObject(hdc, holdPen);
 		DeleteObject(hPen);
 		SelectObject(hdc, holdBrush);
@@ -543,7 +555,31 @@ void app::UpdateBox(int col, int row) {
 		SelectObject(hdc, holdFont);
 		DeleteObject(hFont);
 		ReleaseDC(m_game[i], hdc);
+
 			
+	}
+
+	if (index == 5) {
+		index = 0;
+
+		for (int i = 0; i < boardsNum; i++) {
+			if (completed[i] >= 5 && colorBG[i] == 0) {
+				colorBG[i] = 2;
+				setColor[i] = 1;
+			}
+			else if (colorBG[i] == 0 && completed[i] < 4 && ((boardsNum == 1 && currRow == 6) || (boardsNum == 2 && currRow == 8) || currRow == 10)) {
+				completed[i] = 6;
+				colorBG[i] = 1;
+				setColor[i] = 1;
+			}
+		}
+
+		for (int i = 0; i < boardsNum; i++) {
+			if (setColor[i] == 1) {
+				setColor[i] = 0;
+				DrawGameEnd(i);
+			}
+		}
 	}
 		
 
@@ -582,31 +618,175 @@ void app::ClearGame() {
 		completed[k] = 0;
 	}
 	for (int i = 0; i < boardsNum; i++) {
+		COLORREF color RGB(255, 255, 255);
+		HBRUSH brush = CreateSolidBrush(color);
+		SetClassLongPtr(m_game[i], GCLP_HBRBACKGROUND, (LONG_PTR)brush);
+		DestroyWindow(overlay[i]);
+		overlay[i] = nullptr;
 		DestroyWindow(m_game[i]);
 		m_game[i] = nullptr;
+		colorBG[i] = 0;
 	}
 }
 
 void app::ReadWords() {
 	
 	std::ifstream file("Wordle.txt");
-	std::string w;
+	std::string w, w_mod;
 	if (file.is_open()) {
 		while (getline(file, w))
 		{
-			wordList.push_back(w);
+			w_mod = w.substr(0, 6);
+			std::transform(w_mod.begin(), w_mod.end(), w_mod.begin(), ::toupper); // https://stackoverflow.com/questions/735204/convert-a-string-in-c-to-upper-case
+			wordList.push_back(w_mod); 
 		}
 	}
-	// extracting words from the file
-
-		file.close();
+	file.close();
 }
 
 void app::ChooseWords() {
 
-	for (int i = 0; i < 4; i++) {
+	srand(time(0));
+
+	for (int i = 0; i < boardsNum; i++) {
 		std::string random = wordList[rand() % wordList.size()];
 		word[i] = random;
 	}
 
+}
+
+void app::WriteDifficulty(int d) {
+	std::ofstream file("Wordle.ini");
+	file << "[WORDLE]\n" << "DIFFICULTY=" << d;
+	file.close();
+}
+
+
+int app::GetDifficulty() {
+	std::ifstream file("Wordle.ini");
+	char c; int d;
+	while (file >> c) {
+		if (c == '=') {
+			file >> d;
+			return d;
+		}
+			
+	}
+	return 1;
+}
+
+void app::DrawGameEnd(int i) {
+
+	RECT rc;
+	GetWindowRect(m_game[i], &rc);
+	int w = rc.right - rc.left;
+	int h = rc.bottom - rc.top;
+	overlay[i] = CreateWindowExW(
+		WS_EX_LAYERED,
+		s_class_name.c_str(),
+		L"WORDLE - PUZZLE",
+		WS_OVERLAPPED | WS_VISIBLE | WS_EX_TOPMOST,
+		rc.left,
+		rc.top,
+		w,
+		h,
+		m_main,
+		nullptr,
+		m_instance,
+		this);
+	COLORREF color = colorBG[i] == 1 ? RGB(255, 0, 0) : RGB(0, 255, 0);
+	HBRUSH brush = CreateSolidBrush(color);
+
+	SetClassLongPtr(overlay[i], GCLP_HBRBACKGROUND, (LONG_PTR)brush);
+
+	SetLayeredWindowAttributes(overlay[i], RGB(0, 255, 0), 128, LWA_ALPHA);
+	
+	if (colorBG[i] == 1) {
+		GetClientRect(m_game[i], &rc);
+
+		HDC hdc = GetDC(m_game[i]);
+
+		HFONT hFont = CreateFontW(40, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
+		HFONT holdFont = (HFONT)SelectObject(hdc, hFont);
+
+
+		std::wstring str2(word[i].length(), L' '); 
+
+		std::copy(word[i].begin(), word[i].end(), str2.begin());
+		LPCWSTR str3 = str2.c_str();
+		SetBkMode(hdc, TRANSPARENT);
+
+		SetTextColor(hdc, RGB(255, 255, 255));
+		DrawText(hdc, str3, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		SelectObject(hdc, holdFont);
+		DeleteObject(hFont);
+		ReleaseDC(m_game[i], hdc);
+
+		PAINTSTRUCT ps;
+		hdc = BeginPaint(overlay[i], &ps);
+		hFont = CreateFontW(40, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
+		holdFont = (HFONT)SelectObject(hdc, hFont);
+
+
+		std::wstring sstr2(word[i].length(), L' '); 
+
+		std::copy(word[i].begin(), word[i].end(), sstr2.begin());
+		LPCWSTR sstr3 = sstr2.c_str();
+		SetBkMode(hdc, TRANSPARENT);
+
+		SetTextColor(hdc, RGB(255, 255, 255));
+		DrawText(hdc, sstr3, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		SelectObject(hdc, holdFont);
+		DeleteObject(hFont);
+		EndPaint(overlay[i], &ps);
+	}
+
+}
+
+void app::AnimateBox(int index, int frame, int row) {
+	if (index == 4) {
+		KillTimer(m_main, 15);
+	}
+
+	HDC hdc;
+	HFONT hFont, holdFont;
+	HBRUSH hBrush, holdBrush;
+	HPEN hPen, holdPen;
+
+	COLORREF c0 = RGB(164, 174, 196), c1 = RGB(243, 194, 55), c2 = RGB(121, 184, 81), cf0 = RGB(255,255,255);
+
+	for (int i = 0; i < boardsNum; i++) {
+		if (completed[i] > 5) continue;
+		COLORREF c = boxState[index][row][i] == 2 ? c2 : boxState[index][row][i] == 1 ? c1 : c0;
+		//hdc = BeginPaint(m_game[i], &ps);
+		hdc = GetDC(m_game[i]);
+		hBrush = CreateSolidBrush(c);
+		holdBrush = (HBRUSH)SelectObject(hdc, hBrush);
+		hPen = CreatePen(PS_SOLID, 2, c);
+		holdPen = (HPEN)SelectObject(hdc, hPen);
+		int size = 55;
+		int rows = boardsNum == 1 ? 6 : boardsNum == 2 ? 8 : 10;
+
+		RoundRect(hdc, letterAnimation[index][i].left, letterAnimation[index][i].top, letterAnimation[index][i].right, letterAnimation[index][i].bottom, 5, 5);
+		letterAnimation[index][i].top -= 5;
+		letterAnimation[index][i].bottom += 5;
+		hFont = CreateFontW(30, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
+		holdFont = (HFONT)SelectObject(hdc, hFont);
+		wchar_t* wString = new wchar_t[1];
+		const char cc[2] = { currWord[index] };
+		MultiByteToWideChar(CP_ACP, 0, cc, -1, wString, 1);
+		SetBkMode(hdc, TRANSPARENT);
+		DrawText(hdc, wString, 1, &letterBox[index][row], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		SelectObject(hdc, holdPen);
+		DeleteObject(hPen);
+		SelectObject(hdc, holdBrush);
+		DeleteObject(hBrush);
+		SelectObject(hdc, holdFont);
+		DeleteObject(hFont);
+		ReleaseDC(m_game[i], hdc);
+
+
+	}
 }

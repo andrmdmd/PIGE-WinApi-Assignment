@@ -19,20 +19,26 @@ private:
 		LPARAM lparam);
 	
 	HWND create_keyboard_window();
-	HWND create_game_window(int size, int index);
+	HWND create_game_window(int style, int size, int index);
 	HMENU mMenuHandle;
 	HINSTANCE m_instance;
 	HWND m_main;
 	HWND m_game[4];
+	HWND overlay[4];
+	HWND overlayWord[4];
 	void DrawLetter(char c);
 	void UpdateKey(char c, int ind);
 	void UpdateBox(int col, int row);
+	void AnimateBox(int col, int frame, int row);
 	void DeleteLast();
 	void ClearGame();
 	void DrawNewGame();
 	void GetKeyRects();
 	void ChooseWords();
 	void ReadWords();
+	int GetDifficulty();
+	void WriteDifficulty(int d);
+	void DrawGameEnd(int i);
 
 public:
 	static const int MAX_COLUMNS = 5;
@@ -46,11 +52,14 @@ public:
 	int run(int show_command);
 	static int boardsNum;
 	RECT letterBox[MAX_COLUMNS][MAX_ROWS];
+	RECT letterAnimation[MAX_COLUMNS][4];
 	int boxState[MAX_COLUMNS][MAX_ROWS][4];
 	int keyState[27][4];
+	int colorBG[4];
+	int setColor[4];
 	RECT letterKey[27];
 	RECT keyColor[27][4];
-	int index;
+	int index, frame;
 	
 };
 
