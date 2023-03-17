@@ -20,7 +20,12 @@ int completed[4];
 std::string word[4]; 
 std::vector<std::string> wordList;
 
-bool app::register_class()
+const int SCREEN_MIN_X = 0;
+const int SCREEN_MIN_Y = 0;
+const int SCREEN_MAX_X = GetSystemMetrics(SM_CXSCREEN);
+const int SCREEN_MAX_Y = GetSystemMetrics(SM_CYSCREEN);
+
+bool app::register_class() // tutorial 2048
 {
 	WNDCLASSEXW wcex{};
 
@@ -81,7 +86,7 @@ HWND app::create_game_window(int style, int size, int index)
 		y_coord = GetSystemMetrics(SM_CYSCREEN) / 2 - len3 / 2;
 	}
 	if(size == 4) {
-		len3 = 603;
+		len3 = 663;
 		x_coord = (GetSystemMetrics(SM_CXSCREEN) / 4 - len2 / 4) + (index % 2) * (GetSystemMetrics(SM_CXSCREEN) / 2 - len2 / 2);
 		y_coord = (index/2) * (GetSystemMetrics(SM_CYSCREEN) / 4 - len3 / 4) + (index/2) * (GetSystemMetrics(SM_CYSCREEN) / 2 - len3 / 2);
 	}
@@ -101,7 +106,7 @@ HWND app::create_game_window(int style, int size, int index)
 		this);
 }
 
-LRESULT app::window_proc_static(
+LRESULT app::window_proc_static( // tutorial 2048
 	HWND window,
 	UINT message,
 	WPARAM wparam,
@@ -204,6 +209,19 @@ LRESULT app::window_proc(
 		}
 		break;
 	case WM_MOVE:
+	{
+		//RECT rc;
+		//GetWindowRect(window, &rc);
+		//int x = rc.left;
+		//int y = rc.top;
+
+		//x = x < SCREEN_MIN_X ? SCREEN_MIN_X : x;
+		//y = y < SCREEN_MIN_Y ? SCREEN_MIN_Y : y;
+		//x = x + rc.right - rc.left > SCREEN_MAX_X ? SCREEN_MAX_X - rc.right + rc.left : x;
+		//y = y + rc.bottom - rc.top > SCREEN_MAX_Y ? SCREEN_MAX_Y - rc.bottom + rc.top : y;
+		//SetWindowPos(window, m_main-1, x, y, 0, 0, NULL);
+
+
 		for (int i = 0; i < boardsNum; i++) {
 			if (window == overlay[i]) {
 				if (colorBG[i] == 0) break;
@@ -211,17 +229,23 @@ LRESULT app::window_proc(
 				GetWindowRect(overlay[i], &rc);
 				SetWindowPos(m_game[i], overlay[i], rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, NULL);
 			}
+			else if (window == m_game[i] && colorBG[i] != 0) {
+				RECT rc;
+				GetWindowRect(m_game[i], &rc);
+				SetWindowPos(overlay[i], m_game[i] - 1, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, NULL);
+			}
 		}
 		break;
+	}
 	case WM_CHAR:
 		if (window != m_main) break;
 
 		switch (wparam) {
-		case 0x08: 
+		case 0x08: // backspace
 			if (currCol == 0) break;
 			DeleteLast();
 			break;
-		case 0x0D:
+		case 0x0D: // enter
 			if (currCol != 5) break;
 			if (std::find(wordList.begin(), wordList.end(), currWord) == wordList.end()) {
 				for (int i = 0; i < MAX_COLUMNS; i++) {
@@ -230,14 +254,15 @@ LRESULT app::window_proc(
 				break;
 			}
 			for (int k = 0; k < boardsNum; k++) {
+				completed[k] = 0;
 				for (int i = 0; i < MAX_COLUMNS; i++) {
 					for (int j = 0; j < MAX_COLUMNS; j++) {
 						if (word[k][j] == currWord[i]) {
 							if (i == j) {
+								completed[k]++;
 								if (boxState[i][currRow][k] != 2) {
 									boxState[i][currRow][k] = 2;
-									if (completed[k] >= 5) continue;
-									if(boxState[i][currRow-1][k]!= 2) completed[k]++;
+									
 								}
 							}
 							else if (boxState[i][currRow][k] != 2)
@@ -289,6 +314,8 @@ LRESULT app::window_proc(
 	case WM_NCHITTEST:
 		if (window == m_main) break;
 		return HTCAPTION;
+	/*case WM_PAINT:*/
+		//DrawNewGame();
 	}
 	return DefWindowProcW(window, message, wparam, lparam);
 
@@ -343,6 +370,16 @@ int app::run(int show_command)
 		m_game[i] = create_game_window(0, boardsNum, i);
 		colorBG[i] = 0;
 		setColor[i] = 0;
+	}
+	if (boardsNum == 2) {
+		CheckMenuItem(mMenuHandle, ID_DIFFICULTY_EASY, MF_UNCHECKED);
+		CheckMenuItem(mMenuHandle, ID_DIFFICULTY_MEDIUM, MF_CHECKED);
+		CheckMenuItem(mMenuHandle, ID_DIFFICULTY_HARD, MF_UNCHECKED);
+	}
+	else if (boardsNum == 4) {
+		CheckMenuItem(mMenuHandle, ID_DIFFICULTY_EASY, MF_UNCHECKED);
+		CheckMenuItem(mMenuHandle, ID_DIFFICULTY_MEDIUM, MF_UNCHECKED);
+		CheckMenuItem(mMenuHandle, ID_DIFFICULTY_HARD, MF_CHECKED);
 	}
 	DrawNewGame();
 	GetKeyRects();
@@ -408,11 +445,11 @@ void app::DrawNewGame() {
 	hFont = CreateFontW(25, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
 	holdFont = (HFONT)SelectObject(hdc, hFont);
 	SetBkMode(hdc, TRANSPARENT);
-	for (int i = 1; i < 27; i++) {
-		wchar_t* wString = new wchar_t[1];
-		const char cc[2] = { keyboardLetters[i] };
-		MultiByteToWideChar(CP_ACP, 0, cc, -1, wString, 1);
-		DrawText(hdc, wString, 1, &letterKey[i], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+	for (int j = 1; j < 27; j++) {
+		std::wstring str2(1, L' ');
+		str2[0] = keyboardLetters[j];
+		LPCWSTR wString = str2.c_str();
+		DrawText(hdc, wString, 1, &letterKey[j], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 	}
 	SelectObject(hdc, holdPen);
 	DeleteObject(hPen);
@@ -446,9 +483,9 @@ void app::DrawLetter(char c) {
 		hFont = CreateFontW(30, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
 		holdFont = (HFONT)SelectObject(hdc, hFont);
 
-		wchar_t* wString = new wchar_t[1];
-		const char cc[2] = { c };
-		MultiByteToWideChar(CP_ACP, 0, cc, -1, wString, 1);
+		std::wstring str2(1, L' ');
+		str2[0] = c;
+		LPCWSTR wString = str2.c_str();
 
 		DrawText(hdc, wString, 1, &letterBox[currCol][currRow], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 		SelectObject(hdc, holdFont);
@@ -488,7 +525,7 @@ void app::UpdateKey(char c, int i){
 				RoundRect(hdc, letterKey[p].left, letterKey[p].top, letterKey[p].right, letterKey[p].bottom, 5, 5);
 			else {
 				SetBkMode(hdc, TRANSPARENT);
-				RoundRect(hdc, keyColor[p][k].left, keyColor[p][k].top, keyColor[p][k].right, keyColor[p][k].bottom, 5, 5);
+				RoundRect(hdc, keyColor[p][k].left, keyColor[p][k].top, keyColor[p][k].right, keyColor[p][k].bottom, 3, 3);
 			}
 
 		}
@@ -581,8 +618,6 @@ void app::UpdateBox(int col, int row) {
 			}
 		}
 	}
-		
-
 }
 
 void app::DeleteLast() {
@@ -604,7 +639,6 @@ void app::DeleteLast() {
 		DeleteObject(hBrush);
 		ReleaseDC(m_game[i], hdc);
 	}
-	
 }
 
 void app::ClearGame() {
@@ -616,6 +650,7 @@ void app::ClearGame() {
 			}
 		}
 		completed[k] = 0;
+		colorBG[k] = 0;
 	}
 	for (int i = 0; i < boardsNum; i++) {
 		COLORREF color RGB(255, 255, 255);
@@ -685,7 +720,7 @@ void app::DrawGameEnd(int i) {
 		WS_EX_LAYERED,
 		s_class_name.c_str(),
 		L"WORDLE - PUZZLE",
-		WS_OVERLAPPED | WS_VISIBLE | WS_EX_TOPMOST,
+		WS_OVERLAPPED | WS_EX_TOPMOST,
 		rc.left,
 		rc.top,
 		w,
@@ -700,13 +735,15 @@ void app::DrawGameEnd(int i) {
 	SetClassLongPtr(overlay[i], GCLP_HBRBACKGROUND, (LONG_PTR)brush);
 
 	SetLayeredWindowAttributes(overlay[i], RGB(0, 255, 0), 128, LWA_ALPHA);
+	BringWindowToTop(m_game[i]);
+	ShowWindow(overlay[i], 8);
 	
 	if (colorBG[i] == 1) {
 		GetClientRect(m_game[i], &rc);
 
 		HDC hdc = GetDC(m_game[i]);
 
-		HFONT hFont = CreateFontW(40, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
+		HFONT hFont = CreateFontW(30, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
 		HFONT holdFont = (HFONT)SelectObject(hdc, hFont);
 
 
@@ -725,7 +762,7 @@ void app::DrawGameEnd(int i) {
 
 		PAINTSTRUCT ps;
 		hdc = BeginPaint(overlay[i], &ps);
-		hFont = CreateFontW(40, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
+		hFont = CreateFontW(30, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
 		holdFont = (HFONT)SelectObject(hdc, hFont);
 
 
@@ -769,16 +806,17 @@ void app::AnimateBox(int index, int frame, int row) {
 		int size = 55;
 		int rows = boardsNum == 1 ? 6 : boardsNum == 2 ? 8 : 10;
 
-		RoundRect(hdc, letterAnimation[index][i].left, letterAnimation[index][i].top, letterAnimation[index][i].right, letterAnimation[index][i].bottom, 5, 5);
+		RoundRect(hdc, letterAnimation[index][i].left, letterAnimation[index][i].top, letterAnimation[index][i].right, letterAnimation[index][i].bottom, 3, 3);
 		letterAnimation[index][i].top -= 5;
 		letterAnimation[index][i].bottom += 5;
 		hFont = CreateFontW(30, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0, L"Helvatica");
 		holdFont = (HFONT)SelectObject(hdc, hFont);
-		wchar_t* wString = new wchar_t[1];
-		const char cc[2] = { currWord[index] };
-		MultiByteToWideChar(CP_ACP, 0, cc, -1, wString, 1);
+
+		std::wstring str2(1, L' ');
+		str2[0] = currWord[index];
+		LPCWSTR str3 = str2.c_str();
 		SetBkMode(hdc, TRANSPARENT);
-		DrawText(hdc, wString, 1, &letterBox[index][row], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		DrawText(hdc, str3, -1, &letterBox[index][row], DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 		SelectObject(hdc, holdPen);
 		DeleteObject(hPen);
 		SelectObject(hdc, holdBrush);
